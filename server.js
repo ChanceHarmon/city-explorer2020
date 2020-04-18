@@ -62,7 +62,7 @@ function Movie(movie) {
   this.overview = movie.overview ? movie.overview.slice(0, 1000) : 'No overview avaiable.';
   this.average_votes = movie.vote_average ? movie.vote_average : 'No average avaiable.';
   this.total_votes = movie.vote_count ? movie.vote_count : 'No votes equals no total.';
-  this.image_url = movie.poster_path ? `https://image.tmdb.org/t/p/original${movie.poster_path}` : 'No image avaiable.';
+  this.image_url = movie.poster_path ? `https://image.tmdb.org/t/p/w500${movie.poster_path}` : 'No image avaiable.';
   //this.image_url = `https://image.tmdb.org/t/p/original${movie.backdrop_path}`;
   this.popularity = movie.popularity ? movie.popularity : 'Not popular!';
   this.released_on = movie.release_date ? movie.release_date : 'They would rather you not know about this film...';
@@ -128,23 +128,17 @@ function handleMovies(request, response) {
   const movieQuery = request.query.search_query;
   console.log(movieQuery)
   const key = process.env.MOVIE_API_KEY;
-  const url = `https://api.themoviedb.org/3/search/movie?api_key=${key}&language=en-US&query=${movieQuery}&page=1&include_adult=false`;
+  const url = `https://api.themoviedb.org/3/search/movie?api_key=${key}&query=${movieQuery}`;
   console.log(url)
 
   superagent.get(url)
     .then(movieResults => {
-      const movie = movieResults.body.results.map(result => {
+      const movie = movieResults.body.results;
+      response.send(movie.map(result => {
         console.log(result)
-        let summary = new Movie(result);
-        return summary;
-      }
-      )
-      console.log('response', movie)
-      if (!movie.length) {
-        response.status(500).send('No movies were filmed here.');
-      } else {
-        response.send(movie)
-      }
+        return new Movie(result);
+      }))
+
     }).catch(error => handleError(error, response))
 }
 
