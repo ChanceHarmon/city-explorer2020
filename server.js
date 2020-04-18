@@ -1,5 +1,8 @@
 'use strict';
 
+
+//Imports and configs
+
 require('dotenv').config();
 
 const express = require('express');
@@ -15,8 +18,10 @@ const pg = require('pg');
 const client = new pg.Client(process.env.DATABASE_URL);
 client.on('error', err => console.error(err));
 
-
 const PORT = process.env.PORT;
+
+
+//Routes
 
 app.get('/', (request, response) => {
   response.send('Home route working');
@@ -26,14 +31,13 @@ app.get('/weather', handleWeather);
 app.get('/trails', handleTrails);
 
 
-
+//Constructor Functions
 
 function Location(city, result) {
   this.search_query = city;
-  this.formatted_query = result.body.results[0].formatted_address;
-  this.latitude = result.body.results[0].geometry.location.lat;
-  this.longitude = result.body.results[0].geometry.location.lng;
-
+  this.formatted_query = result.formatted_address;
+  this.latitude = result.geometry.location.lat;
+  this.longitude = result.geometry.location.lng;
 }
 function Weather(date, weatherData) {
   this.forecast = weatherData;
@@ -52,38 +56,29 @@ function Trail(item) {
   this.condition_time = item.conditionDate.slice(11, 19);
 }
 
-
-
+//API Functions
 
 function handleLocation(request, response) {
-
+  let dbSql = { searchQuery: request.query.city, endpoint: 'locations' }
   let city = request.query.city;
   let key = process.env.GEOCODE_API_KEY;
   let url = `https://maps.googleapis.com/maps/api/geocode/json?address=${city}&key=${key}`;
-
-  let sql = `SELECT * FROM locations WHERE search_query=$1;`;
-  let values = [city];
-
-  client.query(sql, values).then(result => {
-    if (result.rowCount > 0) response.send(result.rows[0]);
-    else {
-      console.log('first test')
-      superagent.get(url).then(result => {
-
-        let location = new Location(city, result);
-        let insertSql = `INSERT INTO locations (search_query, formatted_query, latitude, longitude) VALUES ($1, $2, $3, $4) RETURNING ID;`;
-        let newValues = Object.values(location)
-        console.log(newValues);
-        client.query(insertSql, newValues)
-          .then(data => {
-            location.id = data.rows[0].id;
-            response.send(location);
-          })
-      }).catch(err => handleError(err, response));
-    }
-
-  }
-  )
+  searchDatabase(dbSql)
+    .then(result => {
+      if (result.rowCount > 0) response.send(result.rows[0]);
+      else {
+        superagent.get(url).then(result => {
+          let location = new Location(city, result.body.results[0]);
+          dbSql.columns = Object.keys(location).join();
+          dbSql.values = Object.values(location);
+          saveToDatabase(dbSql)
+            .then(data => {
+              location.id = data.rows[0].id;
+              response.send(location);
+            })
+        }).catch(err => handleError(err, response));
+      }
+    })
 }
 
 function handleWeather(request, response) {
@@ -100,7 +95,6 @@ function handleWeather(request, response) {
   }).catch(err => handleError(err, response));
 }
 
-
 function handleTrails(request, response) {
   const { latitude, longitude } = request.query;
   const key = process.env.TRAILS_API_KEY;
@@ -113,24 +107,53 @@ function handleTrails(request, response) {
       response.send(results);
     })
     .catch(error => {
-      errorHandler(error, request, response);
+      handleError(error, response);
     });
 
 }
 
+//Database Functions
+
+function searchDatabase(dbSql) {
+  let condition = '';
+  let values = [];
+  if (dbSql.searchQuery) {
+    condition = 'search_query';
+    values = [dbSql.searchQuery];
+  } else {
+    condition = 'id';
+    values = [dbSql.id];
+  }
+  let sql = `SELECT * FROM ${dbSql.endpoint} WHERE ${condition}=$1;`;
+  return client.query(sql, values);
+}
+
+function saveToDatabase(dbSql) {
+  let safeValues = [];
+  for (let i = 1; i <= dbSql.values.length; i++) {
+    safeValues.push(`$${i}`);
+  }
+  let sqlValues = safeValues.join();
+  let sql = '';
+  if (dbSql.searchQuery) sql = `INSERT INTO ${dbSql.endpoint} (${dbSql.columns}) VALUES (${sqlValues}) RETURNING ID;`;
+  else sql = `INSERT INTO ${dbSql.endpoint} (${dbSql.columns}) VALUES (${sqlValues});`;
+  return client.query(sql, dbSql.values);
+}
 
 
-
+//Basic error handling
 
 function handleError(err, response) {
   console.log(err);
   if (response) response.status(500).send('Sorry something went wrong');
 }
 
-
 app.get('*', (error, response) => {
   response.status(500).send('Sorry, the server is having a moment...');
 })
+
+
+//Turn it on and up, connecting to our database and then turning on our port, two birds, one code.
 
 client.connect()
   .then(() => {
