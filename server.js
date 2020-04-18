@@ -29,6 +29,8 @@ app.get('/', (request, response) => {
 app.get('/location', handleLocation);
 app.get('/weather', handleWeather);
 app.get('/trails', handleTrails);
+app.get('/movies', handleMovies);
+
 
 
 //Constructor Functions
@@ -54,6 +56,16 @@ function Trail(item) {
   this.conditions = item.conditionStatus;
   this.condition_date = item.conditionDate.slice(0, 10);
   this.condition_time = item.conditionDate.slice(11, 19);
+}
+function Movie(movie) {
+  this.title = movie.original_title;
+  this.overview = movie.overview.slice(0, 1000);
+  this.average_votes = movie.vote_average;
+  this.total_votes = movie.vote_count;
+  this.image_url = `https://image.tmdb.org/t/p/original${movie.poster_path}`;
+  //this.image_url = `https://image.tmdb.org/t/p/original${movie.backdrop_path}`;
+  this.popularity = movie.popularity;
+  this.released_on = movie.release_date;
 }
 
 //API Functions
@@ -110,6 +122,26 @@ function handleTrails(request, response) {
       handleError(error, response);
     });
 
+}
+
+function handleMovies(request, response) {
+  const movieQuery = request.query.search_query;
+  console.log(movieQuery)
+  const key = process.env.MOVIE_API_KEY;
+  const url = `https://api.themoviedb.org/3/search/movie?api_key=${key}&language=en-US&query=${movieQuery}&page=1&include_adult=false`;
+  console.log(url)
+
+  superagent.get(url)
+    .then(movieResults => {
+      const movie = movieResults.body.results.map(result => {
+        console.log(result)
+        let summary = new Movie(result);
+        return summary;
+      }
+      )
+
+      response.send(movie)
+    }).catch(error => handleError(error, response))
 }
 
 //Database Functions
