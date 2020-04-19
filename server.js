@@ -58,14 +58,14 @@ function Trail(item) {
   this.condition_time = item.conditionDate.slice(11, 19);
 }
 function Movie(movie) {
-  this.title = movie.original_title ? movie.original_title : 'No title available.'
-  this.overview = movie.overview ? movie.overview.slice(0, 1000) : 'No overview avaiable.';
-  this.average_votes = movie.vote_average ? movie.vote_average : 'No average avaiable.';
-  this.total_votes = movie.vote_count ? movie.vote_count : 'No votes equals no total.';
-  this.image_url = movie.poster_path ? `https://image.tmdb.org/t/p/w500${movie.poster_path}` : 'No image avaiable.';
-  //this.image_url = `https://image.tmdb.org/t/p/original${movie.backdrop_path}`;
-  this.popularity = movie.popularity ? movie.popularity : 'Not popular!';
-  this.released_on = movie.release_date ? movie.release_date : 'They would rather you not know about this film...';
+  this.title = movie.original_title;
+  this.overview = movie.overview.slice(0, 750);
+  this.average_votes = movie.votes_average;
+  this.total_votes = movie.vote_count;
+  this.image_url = `https://image.tmdb.org/t/p/original${movie.poster_path}`;
+  this.popularity = movie.popularity;
+  this.released_on = movie.release_date;
+  this.created_at = Date.now();
 }
 
 //API Functions
