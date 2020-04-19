@@ -30,6 +30,7 @@ app.get('/location', handleLocation);
 app.get('/weather', handleWeather);
 app.get('/trails', handleTrails);
 app.get('/movies', handleMovies);
+app.get('/yelp', handleYelp);
 
 
 
@@ -65,16 +66,24 @@ function Movie(movie) {
   this.image_url = `https://image.tmdb.org/t/p/original${movie.poster_path}`;
   this.popularity = movie.popularity;
   this.released_on = movie.release_date;
-  this.created_at = Date.now();
+}
+function Yelp(yelp) {
+  this.name = yelp.name;
+  this.image_url = yelp.image_url;
+  this.price = yelp.price;
+  this.rating = yelp.rating;
+  this.url = yelp.url;
 }
 
 //API Functions
 
 function handleLocation(request, response) {
+
   let dbSql = { searchQuery: request.query.city, endpoint: 'locations' }
   let city = request.query.city;
   let key = process.env.GEOCODE_API_KEY;
   let url = `https://maps.googleapis.com/maps/api/geocode/json?address=${city}&key=${key}`;
+
   searchDatabase(dbSql)
     .then(result => {
       if (result.rowCount > 0) response.send(result.rows[0]);
@@ -108,9 +117,11 @@ function handleWeather(request, response) {
 }
 
 function handleTrails(request, response) {
+
   const { latitude, longitude } = request.query;
   const key = process.env.TRAILS_API_KEY;
   const url = `https://www.hikingproject.com/data/get-trails?lat=${latitude}&lon=${longitude}&maxDistance=10&key=${key}`;
+
   superagent.get(url)
     .then(result => {
       const data = result.body.trails;
@@ -121,32 +132,47 @@ function handleTrails(request, response) {
     .catch(error => {
       handleError(error, response);
     });
-
 }
 
 function handleMovies(request, response) {
+
   const movieQuery = request.query.search_query;
-  console.log(movieQuery)
   const key = process.env.MOVIE_API_KEY;
   const url = `https://api.themoviedb.org/3/search/movie?api_key=${key}&query=${movieQuery}`;
-  console.log(url)
 
   superagent.get(url)
     .then(movieResults => {
       const movie = movieResults.body.results;
       response.send(movie.map(result => {
-        console.log(result)
         return new Movie(result);
       }))
+    }).catch(error => handleError(error, response))
+}
 
+function handleYelp(request, response) {
+
+  const { latitude, longitude } = request.query;
+  const key = process.env.YELP_API_KEY;
+  const url = `https://api.yelp.com/v3/businesses/search?latitude=${latitude}&longitude=${longitude}`;
+
+  superagent.get(url)
+    .set({ 'Authorization': 'Bearer ' + key })
+    .then(yelpResults => {
+      const review = yelpResults.body.businesses.map(yelp => {
+        let result = new Yelp(yelp);
+        return result;
+      })
+      response.send(review)
     }).catch(error => handleError(error, response))
 }
 
 //Database Functions
 
 function searchDatabase(dbSql) {
+
   let condition = '';
   let values = [];
+
   if (dbSql.searchQuery) {
     condition = 'search_query';
     values = [dbSql.searchQuery];
@@ -154,17 +180,22 @@ function searchDatabase(dbSql) {
     condition = 'id';
     values = [dbSql.id];
   }
+
   let sql = `SELECT * FROM ${dbSql.endpoint} WHERE ${condition}=$1;`;
   return client.query(sql, values);
 }
 
 function saveToDatabase(dbSql) {
+
   let safeValues = [];
+
   for (let i = 1; i <= dbSql.values.length; i++) {
     safeValues.push(`$${i}`);
   }
+
   let sqlValues = safeValues.join();
   let sql = '';
+
   if (dbSql.searchQuery) sql = `INSERT INTO ${dbSql.endpoint} (${dbSql.columns}) VALUES (${sqlValues}) RETURNING ID;`;
   else sql = `INSERT INTO ${dbSql.endpoint} (${dbSql.columns}) VALUES (${sqlValues});`;
   return client.query(sql, dbSql.values);
@@ -183,7 +214,7 @@ app.get('*', (error, response) => {
 })
 
 
-//Turn it on and up, connecting to our database and then turning on our port, two birds, one code.
+//Turn it on and turn it up, connecting to our database and then turning on our port, two birds, one code.
 
 client.connect()
   .then(() => {
